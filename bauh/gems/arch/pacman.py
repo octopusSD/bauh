@@ -1,11 +1,14 @@
+import logging
 import re
+from io import StringIO
 from threading import Thread
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Dict
 
-from bauh.commons.system import run_cmd, new_subprocess, new_root_subprocess, SystemProcess
+from bauh.commons.system import run_cmd, new_subprocess, new_root_subprocess, SystemProcess, SimpleProcess
 
 RE_DEPS = re.compile(r'[\w\-_]+:[\s\w_\-\.]+\s+\[\w+\]')
 RE_OPTDEPS = re.compile(r'[\w\._\-]+\s*:')
+RE_DEP_NOTFOUND = re.compile(r'error:.+\'(.+)\'')
 
 
 def is_enabled() -> bool:
@@ -185,6 +188,73 @@ def list_bin_paths(pkgnames: Set[str]) -> List[str]:
                 bin_paths.append(line)
 
     return bin_paths
+
+
+def get_missing_deps(pkgname: str, ignore_subdeps_if_no_mirror: bool = True) -> Dict[str, str]:
+    missing = dict()
+
+    dep_info = new_subprocess(['pacman', '-Si', pkgname])
+
+    depends_on = set()
+    for out in new_subprocess(['grep', '-Po', 'Depends\s+On\s+:\s\K(.+)'], stdin=dep_info.stdout).stdout:
+        if out:
+            line = out.decode().strip()
+
+            if line:
+                depends_on.update(line.split(' '))
+
+    if depends_on:
+        installed = new_subprocess(['pacman', '-Qq', *depends_on])
+
+        not_installed = []
+
+        for o in installed.stderr:
+            if o:
+                err_line = o.decode()
+
+                if err_line:
+                    not_found = RE_DEP_NOTFOUND.findall(err_line)
+
+                    if not_found:
+                        not_installed.extend(not_found)
+
+        if not_installed:
+
+            missing_mirrors = False
+            for dep in not_installed:
+                pkgname = dep
+                not_installed_info = new_subprocess(['pacman', '-Si', dep])
+
+                mirror = None
+                for o in new_subprocess(['grep', '-Po', "Repository\s+:\s+\K.+"], stdin=not_installed_info.stdout).stdout:
+                    if o:
+                        line = o.decode().strip()
+
+                        if line:
+                            mirror = line
+
+                if not mirror:
+                    mirror_data = get_mirror(dep)
+
+                    if mirror_data:
+                        pkgname = mirror_data[0]
+                        mirror = mirror_data[1]
+
+                missing[pkgname] = mirror
+
+                if mirror is None:
+                    missing_mirrors = True
+
+            if ignore_subdeps_if_no_mirror and missing_mirrors:
+                return missing
+
+            subdeps_mirrors = dict()
+            for pkg in missing:
+                subdeps_mirrors.update(get_missing_deps(pkg))
+
+            missing.update(subdeps_mirrors, ignore_subdeps_if_no_mirror=ignore_subdeps_if_no_mirror)
+
+    return missing
 
 
 def list_installed_files(pkgname: str) -> List[str]:
