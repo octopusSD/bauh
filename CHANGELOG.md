@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.7.4] 2019-12
 ### Improvements
-- Some AUR labels have been changed to not confuse the user
+- AUR:
+    - prioritizing packages from pacman configured repositories over AUR's during dependencies installation
+    - Some AUR labels have been changed to not confuse the user
 
 ### Fixes
 - AUR:
