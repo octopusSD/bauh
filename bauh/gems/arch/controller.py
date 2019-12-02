@@ -467,7 +467,7 @@ class ArchManager(SoftwareManager):
                 depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in check_res['missing_deps']}
                 dep_mirrors = self._map_mirrors(depnames)
 
-                if len(depnames) != len(dep_mirrors): # cheking if a dependency could not be found in any mirror
+                if len(depnames) != len(dep_mirrors):  # cheking if a dependency could not be found in any mirror
                     for dep in depnames:
                         if dep not in dep_mirrors:
                             message.show_dep_not_found(dep, self.i18n, handler.watcher)
@@ -530,7 +530,7 @@ class ArchManager(SoftwareManager):
             if not deps_to_install:
                 return True
             else:
-                dep_not_installed = self._install_deps(deps_to_install, pkg_mirrors, root_password, handler, change_progress=True)
+                dep_not_installed = self._install_deps(pkg_mirrors, root_password, handler, change_progress=True)
 
                 if dep_not_installed:
                     message.show_optdep_not_installed(dep_not_installed, handler.watcher, self.i18n)
