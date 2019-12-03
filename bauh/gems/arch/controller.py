@@ -6,7 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 from threading import Thread
-from typing import List, Set, Type
+from typing import List, Set, Type, Tuple
 
 import requests
 
@@ -319,6 +319,9 @@ class ArchManager(SoftwareManager):
                 if srcinfo.get('optdepends'):
                     info['14_optdepends'] = srcinfo['optdepends']
 
+                if srcinfo.get('checkdepends'):
+                    info['15_checkdepends'] = srcinfo['checkdepends']
+
             if pkg.pkgbuild:
                 info['00_pkg_build'] = pkg.pkgbuild
             else:
@@ -360,42 +363,26 @@ class ArchManager(SoftwareManager):
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
-    def _install_deps(self, pkgs_repos: dict, root_password: str, handler: ProcessHandler, change_progress: bool = False) -> str:
+    def _install_deps(self, deps: List[Tuple[str, str]], root_password: str, handler: ProcessHandler, change_progress: bool = False) -> str:
         """
         :param pkgs_repos:
         :param root_password:
         :param handler:
         :return: not installed dependency
         """
-        progress_increment = int(100 / len(pkgs_repos))
+        progress_increment = int(100 / len(deps))
         progress = 0
         self._update_progress(handler.watcher, 1, change_progress)
 
-        repo_pkgs, aur_pkgs = {}, set()
-
-        for pkgname, mirror in pkgs_repos.items():
-            if mirror == 'aur':
-                aur_pkgs.add(pkgname)
+        for dep in deps:
+            handler.watcher.change_substatus(self.i18n['arch.install.dependency.install'].format(bold('{} ()'.format(dep[0], dep[1]))))
+            if dep[1] == 'aur':
+                installed = self._install_from_aur(pkgname=dep[0], maintainer=None, root_password=root_password, handler=handler, dependency=True, change_progress=False)
             else:
-                repo_pkgs[pkgname] = mirror
-
-        for pkgname, mirror in repo_pkgs.items():  # first install packages from configured repositories
-            handler.watcher.change_substatus(self.i18n['arch.install.dependency.install'].format(bold('{} ()'.format(pkgname, mirror))))
-            installed = self._install(pkgname=pkgname, maintainer=None, root_password=root_password, handler=handler,
-                                      install_file=None, mirror=mirror, change_progress=False)
+                installed = self._install(pkgname=dep[0], maintainer=None, root_password=root_password, handler=handler, install_file=None, mirror=dep[1], change_progress=False)
 
             if not installed:
-                return pkgname
-
-            progress += progress_increment
-            self._update_progress(handler.watcher, progress, change_progress)
-
-        for pkgname in aur_pkgs:  # then from AUR
-            handler.watcher.change_substatus(self.i18n['arch.install.dependency.install'].format(bold('{} ()'.format(pkgname, mirror))))
-            installed = self._install_from_aur(pkgname=pkgname, maintainer=None, root_password=root_password, handler=handler, dependency=True, change_progress=False)
-
-            if not installed:
-                return pkgname
+                return dep[0]
 
             progress += progress_increment
             self._update_progress(handler.watcher, progress, change_progress)
@@ -494,19 +481,42 @@ class ArchManager(SoftwareManager):
                             message.show_dep_not_found(dep, self.i18n, handler.watcher)
                             return False
 
-                aur_deps = {dep for dep, repo in dep_repos.items() if repo == 'aur'}
+                sorted_deps = []  # it will hold the proper order to install the missing dependencies
+                repo_deps, aur_deps = set(), set()
 
-                if aur_deps:
-                    missing_subdeps = self.deps_analyser.get_missing_dependencies(aur_deps, 'aur')
-                    print(missing_subdeps)
+                for dep, repo in dep_repos.items():
+                    if repo == 'aur':
+                        aur_deps.add(dep)
+                    else:
+                        repo_deps.add(dep)
+
+                for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
+                    if deps[0]:
+                        missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
+
+                        if missing_subdeps:
+                            for dep in missing_subdeps:
+                                if not dep[1]:
+                                    message.show_dep_not_found(dep[0], self.i18n, handler.watcher)
+                                    return False
+
+                            for dep in missing_subdeps:
+                                sorted_deps.append(dep)
+
+                for dep, repo in dep_repos.items():
+                    if repo != 'aur':
+                        sorted_deps.append((dep, repo))
+
+                for dep in aur_deps:
+                    sorted_deps.append((dep, 'aur'))
 
                 handler.watcher.change_substatus(self.i18n['arch.missing_deps_found'].format(bold(pkgname)))
 
-                if not confirmation.request_install_missing_deps(pkgname, dep_repos, handler.watcher, self.i18n):
+                if not confirmation.request_install_missing_deps(pkgname, sorted_deps, handler.watcher, self.i18n):
                     handler.watcher.print(self.i18n['action.cancelled'])
                     return False
 
-                dep_not_installed = self._install_deps(dep_repos, root_password, handler, change_progress=False)
+                dep_not_installed = self._install_deps(sorted_deps, root_password, handler, change_progress=False)
 
                 if dep_not_installed:
                     message.show_dep_not_installed(handler.watcher, pkgname, dep_not_installed, self.i18n)

@@ -1,17 +1,13 @@
 import re
 from threading import Thread
-from typing import List, Set, Tuple, Dict
+from typing import List, Set, Tuple
 
 from bauh.commons.system import run_cmd, new_subprocess, new_root_subprocess, SystemProcess
+from bauh.gems.arch.exceptions import PackageNotFoundException
 
 RE_DEPS = re.compile(r'[\w\-_]+:[\s\w_\-\.]+\s+\[\w+\]')
 RE_OPTDEPS = re.compile(r'[\w\._\-]+\s*:')
 RE_DEP_NOTFOUND = re.compile(r'error:.+\'(.+)\'')
-
-class PackageNotFoundException(Exception):
-
-    def __init__(self, name: str):
-        self.name = name
 
 
 def is_enabled() -> bool:

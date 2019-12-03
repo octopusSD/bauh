@@ -4,6 +4,8 @@ from typing import Set, List
 from bauh.api.http import HttpClient
 import urllib.parse
 
+from bauh.gems.arch.exceptions import PackageNotFoundException
+
 URL_INFO = 'https://aur.archlinux.org/rpc/?v=5&type=info&'
 URL_SRC_INFO = 'https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h='
 URL_SEARCH = 'https://aur.archlinux.org/rpc/?v=5&type=search&arg='
@@ -50,7 +52,10 @@ class AURClient:
         deps = set()
         info = self.get_src_info(name)
 
-        for attr in ('makedepends', 'depends'):
+        if not info:
+            raise PackageNotFoundException(name)
+
+        for attr in ('makedepends', 'depends', 'checkdepends'):
             if info.get(attr):
                 deps.update(info[attr])
 
