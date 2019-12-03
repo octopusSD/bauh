@@ -46,5 +46,15 @@ class AURClient:
 
             return info
 
+    def get_all_dependencies(self, name: str) -> Set[str]:
+        deps = set()
+        info = self.get_src_info(name)
+
+        for attr in ('makedepends', 'depends'):
+            if info.get(attr):
+                deps.update(info[attr])
+
+        return deps
+
     def _map_names_as_queries(self, names) -> str:
         return '&'.join(['arg[{}]={}'.format(i, urllib.parse.quote(n)) for i, n in enumerate(names)])

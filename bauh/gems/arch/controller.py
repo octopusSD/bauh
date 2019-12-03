@@ -22,6 +22,7 @@ from bauh.commons.system import SystemProcess, ProcessHandler, new_subprocess, r
 from bauh.gems.arch import BUILD_DIR, aur, pacman, makepkg, pkgbuild, message, confirmation, disk, git, suggestions, \
     gpg, URL_CATEGORIES_FILE, CATEGORIES_CACHE_DIR, CATEGORIES_FILE_PATH
 from bauh.gems.arch.aur import AURClient
+from bauh.gems.arch.depedencies import DependenciesAnalyser
 from bauh.gems.arch.mapper import ArchDataMapper
 from bauh.gems.arch.model import ArchPackage
 from bauh.gems.arch.worker import AURIndexUpdater, ArchDiskCacheUpdater, ArchCompilationOptimizer
@@ -62,6 +63,7 @@ class ArchManager(SoftwareManager):
         self.categories_mapper = CategoriesDownloader('AUR', context.http_client, context.logger, self, self.context.disk_cache,
                                                       URL_CATEGORIES_FILE, CATEGORIES_CACHE_DIR, CATEGORIES_FILE_PATH)
         self.categories = {}
+        self.deps_analyser = DependenciesAnalyser(self.aur_client)
 
     def _upgrade_search_result(self, apidata: dict, installed_pkgs: dict, downgrade_enabled: bool, res: SearchResult, disk_loader: DiskCacheLoader):
         app = self.mapper.map_api_data(apidata, installed_pkgs['not_signed'], self.categories)
@@ -308,11 +310,14 @@ class ArchManager(SoftwareManager):
             srcinfo = self.aur_client.get_src_info(pkg.name)
 
             if srcinfo:
+                if srcinfo.get('makedepends'):
+                    info['12_makedepends'] = srcinfo['makedepends']
+
                 if srcinfo.get('depends'):
-                    info['11_dependson'] = srcinfo['depends']
+                    info['13_dependson'] = srcinfo['depends']
 
                 if srcinfo.get('optdepends'):
-                    info['12_optdepends'] = srcinfo['optdepends']
+                    info['14_optdepends'] = srcinfo['optdepends']
 
             if pkg.pkgbuild:
                 info['00_pkg_build'] = pkg.pkgbuild
@@ -398,7 +403,7 @@ class ArchManager(SoftwareManager):
         self._update_progress(handler.watcher, 100, change_progress)
 
     def _map_repos(self, pkgnames: Set[str]) -> dict:
-        pkg_mirrors = pacman.get_mirrors(pkgnames)  # getting mirrors set
+        pkg_mirrors = pacman.get_repositories(pkgnames)  # getting mirrors set
 
         if len(pkgnames) != len(pkg_mirrors):  # checking if any dep not found in the distro mirrors are from AUR
             nomirrors = {p for p in pkgnames if p not in pkg_mirrors}
@@ -492,16 +497,8 @@ class ArchManager(SoftwareManager):
                 aur_deps = {dep for dep, repo in dep_repos.items() if repo == 'aur'}
 
                 if aur_deps:
-                    for dep in aur_deps:
-                        dep_data = self.aur_client.get_src_info(dep)
-
-                        if dep_data.get('depends'):
-                            # TODO
-                            pass
-
-                        if dep_data.get('makedepends'):
-                            # TODO
-                            pass
+                    missing_subdeps = self.deps_analyser.get_missing_dependencies(aur_deps, 'aur')
+                    print(missing_subdeps)
 
                 handler.watcher.change_substatus(self.i18n['arch.missing_deps_found'].format(bold(pkgname)))
 
