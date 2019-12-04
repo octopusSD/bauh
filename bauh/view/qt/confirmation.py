@@ -31,12 +31,12 @@ class ConfirmationDialog(QMessageBox):
             scroll = QScrollArea(self)
             scroll.setFrameShape(QFrame.NoFrame)
             scroll.setWidgetResizable(True)
-            scroll.setMinimumHeight(100)
-            scroll.setMaximumHeight(screen_size.height() / 3)
 
             comps_container = QWidget()
             comps_container.setLayout(QVBoxLayout())
             scroll.setWidget(comps_container)
+
+            height = 0
 
             for idx, comp in enumerate(components):
                 if isinstance(comp, SingleSelectComponent):
@@ -46,8 +46,15 @@ class ConfirmationDialog(QMessageBox):
                 else:
                     raise Exception("Cannot render instances of " + comp.__class__.__name__)
 
+                height += inst.sizeHint().height()
                 comps_container.layout().addWidget(inst)
 
+            height = height if height < screen_size.height() / 2 else height / 2
+
+            if height < 100:
+                height = 100
+
+            scroll.setFixedHeight(height)
             self.layout().addWidget(scroll, 1, 1)
 
         self.exec_()
