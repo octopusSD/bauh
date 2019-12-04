@@ -431,14 +431,16 @@ class ArchManager(SoftwareManager):
 
         return True
 
+    def _should_check_subdeps(self):
+        return bool(int(os.getenv('BAUH_ARCH_CHECK_SUBDEPS', 1)))
+
     def _build(self, pkgname: str, maintainer: str, root_password: str, handler: ProcessHandler, build_dir: str, project_dir: str, dependency: bool, skip_optdeps: bool = False, change_progress: bool = True) -> bool:
 
         self._pre_download_source(pkgname, project_dir, handler.watcher)
 
         self._update_progress(handler.watcher, 50, change_progress)
 
-        check_subdeps = bool(int(os.getenv('BAUH_ARCH_CHECK_SUBDEPS', 1)))
-        if not self._handle_deps_and_keys(pkgname, root_password, handler, project_dir, check_subdeps=check_subdeps):
+        if not self._handle_deps_and_keys(pkgname, root_password, handler, project_dir, check_subdeps=self._should_check_subdeps()):
             return False
 
         # building main package
@@ -579,6 +581,21 @@ class ArchManager(SoftwareManager):
             if not deps_to_install:
                 return True
             else:
+                sorted_deps = []
+
+                if self._should_check_subdeps():
+                    missing_deps = self._map_missing_deps(deps_to_install, handler.watcher, check_subdeps=True)
+
+                    if missing_deps is None:
+                        return False
+
+                    if missing_deps:
+                        if not confirmation.request_install_missing_deps(pkgname, sorted_deps, handler.watcher, self.i18n):
+                            handler.watcher.print(self.i18n['action.cancelled'])
+                            return False
+
+                        sorted_deps.extend(missing_deps)
+
                 aur_deps, repo_deps = [], []
 
                 for dep in deps_to_install:
@@ -589,7 +606,10 @@ class ArchManager(SoftwareManager):
                     else:
                         repo_deps.append((dep, mirror))
 
-                dep_not_installed = self._install_deps([*repo_deps, *aur_deps], root_password, handler, change_progress=True)
+                sorted_deps.extend(repo_deps)
+                sorted_deps.extend(aur_deps)
+
+                dep_not_installed = self._install_deps(sorted_deps, root_password, handler, change_progress=True)
 
                 if dep_not_installed:
                     message.show_optdep_not_installed(dep_not_installed, handler.watcher, self.i18n)
