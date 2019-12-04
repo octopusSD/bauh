@@ -284,7 +284,7 @@ def read_repository_from_info(name: str) -> str:
 
 
 def guess_repository(name: str) -> Tuple[str, str]:
-    res = run_cmd('pacman -Ss {}'.format(name))
+    res = run_cmd('pacman -Ss {}'.format(name.split('=')[0] if '=' in name else name))
 
     if res:
         lines = res.split('\n')

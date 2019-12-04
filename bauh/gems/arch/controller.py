@@ -436,7 +436,9 @@ class ArchManager(SoftwareManager):
         self._pre_download_source(pkgname, project_dir, handler.watcher)
 
         self._update_progress(handler.watcher, 50, change_progress)
-        if not self._check_deps(pkgname, root_password, handler, project_dir):
+
+        check_subdeps = bool(int(os.getenv('BAUH_ARCH_CHECK_SUBDEPS', 1)))
+        if not self._handle_deps_and_keys(pkgname, root_password, handler, project_dir, check_subdeps=check_subdeps):
             return False
 
         # building main package
@@ -466,7 +468,7 @@ class ArchManager(SoftwareManager):
 
         return False
 
-    def _map_missing_deps(self, deps: List[str], watcher: ProcessWatcher) -> List[Tuple[str, str]]:
+    def _map_missing_deps(self, deps: List[str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
         depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in deps}
         dep_repos = self._map_repos(depnames)
 
@@ -477,6 +479,7 @@ class ArchManager(SoftwareManager):
                     return
 
         sorted_deps = []  # it will hold the proper order to install the missing dependencies
+
         repo_deps, aur_deps = set(), set()
 
         for dep, repo in dep_repos.items():
@@ -485,18 +488,19 @@ class ArchManager(SoftwareManager):
             else:
                 repo_deps.add(dep)
 
-        for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
-            if deps[0]:
-                missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
+        if check_subdeps:
+            for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
+                if deps[0]:
+                    missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
 
-                if missing_subdeps:
-                    for dep in missing_subdeps:
-                        if not dep[1]:
-                            message.show_dep_not_found(dep[0], self.i18n, watcher)
-                            return
+                    if missing_subdeps:
+                        for dep in missing_subdeps:
+                            if not dep[1]:
+                                message.show_dep_not_found(dep[0], self.i18n, watcher)
+                                return
 
-                    for dep in missing_subdeps:
-                        sorted_deps.append(dep)
+                        for dep in missing_subdeps:
+                            sorted_deps.append(dep)
 
         for dep, repo in dep_repos.items():
             if repo != 'aur':
@@ -507,13 +511,13 @@ class ArchManager(SoftwareManager):
 
         return sorted_deps
 
-    def _check_deps(self, pkgname: str, root_password: str, handler: ProcessHandler, pkgdir: str) -> bool:
+    def _handle_deps_and_keys(self, pkgname: str, root_password: str, handler: ProcessHandler, pkgdir: str, check_subdeps: bool = True) -> bool:
         handler.watcher.change_substatus(self.i18n['arch.checking.deps'].format(bold(pkgname)))
         check_res = makepkg.check(pkgdir, handler)
 
         if check_res:
             if check_res.get('missing_deps'):
-                sorted_deps = self._map_missing_deps(check_res['missing_deps'], handler.watcher)
+                sorted_deps = self._map_missing_deps(check_res['missing_deps'], handler.watcher, check_subdeps=check_subdeps)
 
                 if sorted_deps is None:
                     return False
@@ -531,7 +535,7 @@ class ArchManager(SoftwareManager):
                     return False
 
                 # it is necessary to re-check because missing PGP keys are only notified when there are none missing
-                return self._check_deps(pkgname, root_password, handler, pkgdir)
+                return self._handle_deps_and_keys(pkgname, root_password, handler, pkgdir, check_subdeps=False)
 
             if check_res.get('gpg_key'):
                 if handler.watcher.request_confirmation(title=self.i18n['arch.aur.install.unknown_key.title'],
