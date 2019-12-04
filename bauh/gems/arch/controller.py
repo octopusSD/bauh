@@ -466,49 +466,57 @@ class ArchManager(SoftwareManager):
 
         return False
 
+    def _map_missing_deps(self, deps: List[str], watcher: ProcessWatcher) -> List[Tuple[str, str]]:
+        depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in deps}
+        dep_repos = self._map_repos(depnames)
+
+        if len(depnames) != len(dep_repos):  # checking if a dependency could not be found in any mirror
+            for dep in depnames:
+                if dep not in dep_repos:
+                    message.show_dep_not_found(dep, self.i18n, watcher)
+                    return
+
+        sorted_deps = []  # it will hold the proper order to install the missing dependencies
+        repo_deps, aur_deps = set(), set()
+
+        for dep, repo in dep_repos.items():
+            if repo == 'aur':
+                aur_deps.add(dep)
+            else:
+                repo_deps.add(dep)
+
+        for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
+            if deps[0]:
+                missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
+
+                if missing_subdeps:
+                    for dep in missing_subdeps:
+                        if not dep[1]:
+                            message.show_dep_not_found(dep[0], self.i18n, watcher)
+                            return
+
+                    for dep in missing_subdeps:
+                        sorted_deps.append(dep)
+
+        for dep, repo in dep_repos.items():
+            if repo != 'aur':
+                sorted_deps.append((dep, repo))
+
+        for dep in aur_deps:
+            sorted_deps.append((dep, 'aur'))
+
+        return sorted_deps
+
     def _check_deps(self, pkgname: str, root_password: str, handler: ProcessHandler, pkgdir: str) -> bool:
         handler.watcher.change_substatus(self.i18n['arch.checking.deps'].format(bold(pkgname)))
         check_res = makepkg.check(pkgdir, handler)
 
         if check_res:
             if check_res.get('missing_deps'):
-                depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in check_res['missing_deps']}
-                dep_repos = self._map_repos(depnames)
+                sorted_deps = self._map_missing_deps(check_res['missing_deps'], handler.watcher)
 
-                if len(depnames) != len(dep_repos):  # checking if a dependency could not be found in any mirror
-                    for dep in depnames:
-                        if dep not in dep_repos:
-                            message.show_dep_not_found(dep, self.i18n, handler.watcher)
-                            return False
-
-                sorted_deps = []  # it will hold the proper order to install the missing dependencies
-                repo_deps, aur_deps = set(), set()
-
-                for dep, repo in dep_repos.items():
-                    if repo == 'aur':
-                        aur_deps.add(dep)
-                    else:
-                        repo_deps.add(dep)
-
-                for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
-                    if deps[0]:
-                        missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
-
-                        if missing_subdeps:
-                            for dep in missing_subdeps:
-                                if not dep[1]:
-                                    message.show_dep_not_found(dep[0], self.i18n, handler.watcher)
-                                    return False
-
-                            for dep in missing_subdeps:
-                                sorted_deps.append(dep)
-
-                for dep, repo in dep_repos.items():
-                    if repo != 'aur':
-                        sorted_deps.append((dep, repo))
-
-                for dep in aur_deps:
-                    sorted_deps.append((dep, 'aur'))
+                if sorted_deps is None:
+                    return False
 
                 handler.watcher.change_substatus(self.i18n['arch.missing_deps_found'].format(bold(pkgname)))
 
