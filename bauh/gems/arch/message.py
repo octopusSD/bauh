@@ -12,7 +12,7 @@ def show_dep_not_installed(watcher: ProcessWatcher, pkgname: str, depname: str, 
 
 def show_dep_not_found(depname: str, i18n: I18n, watcher: ProcessWatcher):
     watcher.show_message(title=i18n['arch.install.dep_not_found.title'],
-                         body=i18n['arch.install.dep_not_found.body'].format(bold(depname)),
+                         body='<p>{}</p>'.format(i18n['arch.install.dep_not_found.body'].format(bold(depname))),
                          type_=MessageType.ERROR)
 
 
