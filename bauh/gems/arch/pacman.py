@@ -8,6 +8,7 @@ from bauh.gems.arch.exceptions import PackageNotFoundException
 RE_DEPS = re.compile(r'[\w\-_]+:[\s\w_\-\.]+\s+\[\w+\]')
 RE_OPTDEPS = re.compile(r'[\w\._\-]+\s*:')
 RE_DEP_NOTFOUND = re.compile(r'error:.+\'(.+)\'')
+RE_DEP_OPERATORS = re.compile(r'[<>=]')
 
 
 def is_enabled() -> bool:
@@ -284,7 +285,7 @@ def read_repository_from_info(name: str) -> str:
 
 
 def guess_repository(name: str) -> Tuple[str, str]:
-    res = run_cmd('pacman -Ss {}'.format(name.split('=')[0] if '=' in name else name))
+    res = run_cmd('pacman -Ss {}'.format(RE_DEP_OPERATORS.split(name)[0]))
 
     if res:
         lines = res.split('\n')
