@@ -6,7 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 from threading import Thread
-from typing import List, Set, Type, Tuple
+from typing import List, Set, Type, Tuple, Dict
 
 import requests
 
@@ -470,21 +470,12 @@ class ArchManager(SoftwareManager):
 
         return False
 
-    def _map_missing_deps(self, deps: List[str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
-        depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in deps}
-        dep_repos = self._map_repos(depnames)
-
-        if len(depnames) != len(dep_repos):  # checking if a dependency could not be found in any mirror
-            for dep in depnames:
-                if dep not in dep_repos:
-                    message.show_dep_not_found(dep, self.i18n, watcher)
-                    return
-
+    def _map_known_missing_deps(self, deps: Dict[str, str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
         sorted_deps = []  # it will hold the proper order to install the missing dependencies
 
         repo_deps, aur_deps = set(), set()
 
-        for dep, repo in dep_repos.items():
+        for dep, repo in deps.items():
             if repo == 'aur':
                 aur_deps.add(dep)
             else:
@@ -504,7 +495,7 @@ class ArchManager(SoftwareManager):
                         for dep in missing_subdeps:
                             sorted_deps.append(dep)
 
-        for dep, repo in dep_repos.items():
+        for dep, repo in deps.items():
             if repo != 'aur':
                 sorted_deps.append((dep, repo))
 
@@ -513,13 +504,25 @@ class ArchManager(SoftwareManager):
 
         return sorted_deps
 
+    def _map_unknown_missing_deps(self, deps: List[str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
+        depnames = {RE_SPLIT_VERSION.split(dep)[0] for dep in deps}
+        dep_repos = self._map_repos(depnames)
+
+        if len(depnames) != len(dep_repos):  # checking if a dependency could not be found in any mirror
+            for dep in depnames:
+                if dep not in dep_repos:
+                    message.show_dep_not_found(dep, self.i18n, watcher)
+                    return
+
+        return self._map_known_missing_deps(dep_repos, watcher, check_subdeps)
+
     def _handle_deps_and_keys(self, pkgname: str, root_password: str, handler: ProcessHandler, pkgdir: str, check_subdeps: bool = True) -> bool:
         handler.watcher.change_substatus(self.i18n['arch.checking.deps'].format(bold(pkgname)))
         check_res = makepkg.check(pkgdir, handler)
 
         if check_res:
             if check_res.get('missing_deps'):
-                sorted_deps = self._map_missing_deps(check_res['missing_deps'], handler.watcher, check_subdeps=check_subdeps)
+                sorted_deps = self._map_unknown_missing_deps(check_res['missing_deps'], handler.watcher, check_subdeps=check_subdeps)
 
                 if sorted_deps is None:
                     return False
@@ -584,14 +587,13 @@ class ArchManager(SoftwareManager):
                 sorted_deps = []
 
                 if self._should_check_subdeps():
-                    missing_deps = self._map_missing_deps(deps_to_install, handler.watcher, check_subdeps=True)
+                    missing_deps = self._map_known_missing_deps({d: pkg_mirrors[d] for d in deps_to_install}, handler.watcher)
 
                     if missing_deps is None:
                         return True  # because the main package installation was successful
 
                     if missing_deps:
-                        to_display = [dep for dep in missing_deps if dep[0] not in deps_to_install]
-                        if not confirmation.request_install_missing_deps(None, to_display, handler.watcher, self.i18n):
+                        if not confirmation.request_install_missing_deps(None, missing_deps, handler.watcher, self.i18n):
                             handler.watcher.print(self.i18n['action.cancelled'])
                             return True  # because the main package installation was successful
 
