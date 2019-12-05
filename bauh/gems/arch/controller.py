@@ -598,19 +598,19 @@ class ArchManager(SoftwareManager):
                             return True  # because the main package installation was successful
 
                         sorted_deps.extend(missing_deps)
+                else:
+                    aur_deps, repo_deps = [], []
 
-                aur_deps, repo_deps = [], []
+                    for dep in deps_to_install:
+                        mirror = pkg_mirrors[dep]
 
-                for dep in deps_to_install:
-                    mirror = pkg_mirrors[dep]
+                        if mirror == 'aur':
+                            aur_deps.append((dep, mirror))
+                        else:
+                            repo_deps.append((dep, mirror))
 
-                    if mirror == 'aur':
-                        aur_deps.append((dep, mirror))
-                    else:
-                        repo_deps.append((dep, mirror))
-
-                sorted_deps.extend(repo_deps)
-                sorted_deps.extend(aur_deps)
+                    sorted_deps.extend(repo_deps)
+                    sorted_deps.extend(aur_deps)
 
                 dep_not_installed = self._install_deps(sorted_deps, root_password, handler, change_progress=True)
 
