@@ -587,12 +587,13 @@ class ArchManager(SoftwareManager):
                     missing_deps = self._map_missing_deps(deps_to_install, handler.watcher, check_subdeps=True)
 
                     if missing_deps is None:
-                        return False
+                        return True  # because the main package installation was successful
 
                     if missing_deps:
-                        if not confirmation.request_install_missing_deps(None, missing_deps, handler.watcher, self.i18n):
+                        to_display = [dep for dep in missing_deps if dep[0] not in deps_to_install]
+                        if not confirmation.request_install_missing_deps(None, to_display, handler.watcher, self.i18n):
                             handler.watcher.print(self.i18n['action.cancelled'])
-                            return True
+                            return True  # because the main package installation was successful
 
                         sorted_deps.extend(missing_deps)
 
