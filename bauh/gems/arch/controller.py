@@ -470,12 +470,12 @@ class ArchManager(SoftwareManager):
 
         return False
 
-    def _map_known_missing_deps(self, deps: Dict[str, str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
+    def _map_known_missing_deps(self, known_deps: Dict[str, str], watcher: ProcessWatcher, check_subdeps: bool = True) -> List[Tuple[str, str]]:
         sorted_deps = []  # it will hold the proper order to install the missing dependencies
 
         repo_deps, aur_deps = set(), set()
 
-        for dep, repo in deps.items():
+        for dep, repo in known_deps.items():
             if repo == 'aur':
                 aur_deps.add(dep)
             else:
@@ -495,7 +495,7 @@ class ArchManager(SoftwareManager):
                         for dep in missing_subdeps:
                             sorted_deps.append(dep)
 
-        for dep, repo in deps.items():
+        for dep, repo in known_deps.items():
             if repo != 'aur':
                 sorted_deps.append((dep, repo))
 
