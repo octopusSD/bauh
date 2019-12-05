@@ -35,7 +35,7 @@ def request_optional_deps(pkgname: str, pkg_mirrors: dict, watcher: ProcessWatch
 
 
 def request_install_missing_deps(pkgname: str, deps: List[Tuple[str, str]], watcher: ProcessWatcher, i18n: I18n) -> bool:
-    msg = '<p>{}</p>'.format(i18n['arch.missing_deps.body'].format(name=bold(pkgname), deps=bold(str(len(deps)))))
+    msg = '<p>{}</p>'.format(i18n['arch.missing_deps.body'].format(name=bold(pkgname) if pkgname else '', deps=bold(str(len(deps)))))
 
     opts = []
     for dep in deps:

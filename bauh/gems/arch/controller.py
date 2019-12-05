@@ -590,9 +590,9 @@ class ArchManager(SoftwareManager):
                         return False
 
                     if missing_deps:
-                        if not confirmation.request_install_missing_deps(','.join(deps_to_install), missing_deps, handler.watcher, self.i18n):
+                        if not confirmation.request_install_missing_deps(None, missing_deps, handler.watcher, self.i18n):
                             handler.watcher.print(self.i18n['action.cancelled'])
-                            return False
+                            return True
 
                         sorted_deps.extend(missing_deps)
 
