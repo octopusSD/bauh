@@ -274,23 +274,25 @@ def read_repository_from_info(name: str) -> str:
 
 
 def guess_repository(name: str) -> Tuple[str, str]:
-    res = run_cmd('pacman -Ss {}'.format(RE_DEP_OPERATORS.split(name)[0]))
+    only_name = RE_DEP_OPERATORS.split(name)[0]
+    res = run_cmd('pacman -Ss {}'.format(only_name))
 
     if res:
         lines = res.split('\n')
 
         if lines:
             for line in lines:
-                data = line[0].split('/')
-                name, repo = data[1].split(' ')[0], data[0]
+                if line and not line.startswith(' '):
+                    data = line.split('/')
+                    line_name, line_repo = data[1].split(' ')[0], data[0]
 
-                provided = read_provides(name)
+                    provided = read_provides(line_name)
 
-                if provided:
-                    found = (p for p in provided if name == RE_DEP_OPERATORS.split(p)[0])
+                    if provided:
+                        found = {p for p in provided if only_name == RE_DEP_OPERATORS.split(p)[0]}
 
-                    if found:
-                        return name, repo
+                        if found:
+                            return line_name, line_repo
 
 
 def read_provides(name: str) -> Set[str]:
@@ -313,7 +315,7 @@ def read_provides(name: str) -> Set[str]:
 
     for out in new_subprocess(['grep', '-Po', 'Provides\s+:\s\K(.+)'], stdin=dep_info.stdout).stdout:
         if out:
-            provided_names = out.decode().strip().split(' ')
+            provided_names = [p.strip() for p in out.decode().strip().split(' ') if p]
 
             if provided_names[0].lower() == 'none':
                 provides = {name}
