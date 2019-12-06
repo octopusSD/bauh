@@ -351,7 +351,7 @@ def read_dependencies(name: str) -> Set[str]:
             line = out.decode().strip()
 
             if line:
-                depends_on.update(line.split(' '))
+                depends_on.update([d for d in line.split(' ') if d and d.lower() != 'none'])
 
     return depends_on
 
