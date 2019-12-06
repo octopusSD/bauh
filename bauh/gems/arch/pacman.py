@@ -16,17 +16,6 @@ def is_enabled() -> bool:
     return res and not res.strip().startswith('which ')
 
 
-def get_configured_repository(pkg: str) -> Tuple[str, str]:
-    res = run_cmd('pacman -Ss {}'.format(pkg))
-
-    if res:
-        lines = res.split('\n')
-
-        if lines:
-            data = lines[0].split('/')
-            return data[1].split(' ')[0], data[0]
-
-
 def get_repositories(pkgs: Set[str]) -> dict:
     pkgre = '|'.join(pkgs).replace('+', r'\+').replace('.', r'\.')
 
@@ -44,7 +33,7 @@ def get_repositories(pkgs: Set[str]) -> dict:
 
     if not_found:  # if there are some packages not found, try to find via the single method:
         for dep in not_found:
-            mirror_data = get_configured_repository(dep)
+            mirror_data = guess_repository(dep)
 
             if mirror_data:
                 mirrors[mirror_data[0]] = mirror_data[1]
@@ -291,8 +280,47 @@ def guess_repository(name: str) -> Tuple[str, str]:
         lines = res.split('\n')
 
         if lines:
-            data = lines[0].split('/')
-            return data[1].split(' ')[0], data[0]
+            for line in lines:
+                data = line[0].split('/')
+                name, repo = data[1].split(' ')[0], data[0]
+
+                provided = read_provides(name)
+
+                if provided:
+                    found = (p for p in provided if name == RE_DEP_OPERATORS.split(p)[0])
+
+                    if found:
+                        return name, repo
+
+
+def read_provides(name: str) -> Set[str]:
+    dep_info = new_subprocess(['pacman', '-Si', name])
+
+    not_found = False
+
+    for o in dep_info.stderr:
+        if o:
+            err_line = o.decode()
+
+            if err_line:
+                if RE_DEP_NOTFOUND.findall(err_line):
+                    not_found = True
+
+    if not_found:
+        raise PackageNotFoundException(name)
+
+    provides = None
+
+    for out in new_subprocess(['grep', '-Po', 'Provides\s+:\s\K(.+)'], stdin=dep_info.stdout).stdout:
+        if out:
+            provided_names = out.decode().strip().split(' ')
+
+            if provided_names[0].lower() == 'none':
+                provides = {name}
+            else:
+                provides = set(provided_names)
+
+    return provides
 
 
 def read_dependencies(name: str) -> Set[str]:
