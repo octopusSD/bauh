@@ -522,6 +522,7 @@ class ArchManager(SoftwareManager):
 
         if check_res:
             if check_res.get('missing_deps'):
+                handler.watcher.change_substatus(self.i18n['arch.checking.missing_deps'].format(bold(pkgname)))
                 sorted_deps = self._map_unknown_missing_deps(check_res['missing_deps'], handler.watcher, check_subdeps=check_subdeps)
 
                 if sorted_deps is None:

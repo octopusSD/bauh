@@ -32,11 +32,13 @@ class DependenciesAnalyser:
 
         output.append((name, ''))
 
-    def get_missing_packages(self, names: Set[str], mirror: str = None) -> List[Tuple[str, str]]:
+    def get_missing_packages(self, names: Set[str], mirror: str = None, in_analysis: Set[str] = None) -> List[Tuple[str, str]]:
 
         missing_names = pacman.check_missing(names)
 
         if missing_names:
+            global_in_analysis = in_analysis if in_analysis else set()
+
             missing_root = []
             threads = []
 
@@ -55,16 +57,20 @@ class DependenciesAnalyser:
                 for dep in missing_root:
                     if not dep[1]:
                         return missing_root
+                    else:
+                        global_in_analysis.add(dep[0])
             else:
                 for missing in missing_names:
                     missing_root.append((missing, mirror))
+                    global_in_analysis.add(missing)
 
             missing_sub = []
             for dep in missing_root:
                 subdeps = self.aur_client.get_all_dependencies(dep[0]) if dep[1] == 'aur' else pacman.read_dependencies(dep[0])
+                subdeps_not_analysed = {dep for dep in subdeps if dep not in global_in_analysis}
 
-                if subdeps:
-                    missing_subdeps = self.get_missing_packages(subdeps)
+                if subdeps_not_analysed:
+                    missing_subdeps = self.get_missing_packages(subdeps_not_analysed, in_analysis=global_in_analysis)
 
                     # checking if there is any unknown:
                     if missing_subdeps:
@@ -83,7 +89,7 @@ class DependenciesAnalyser:
             subdeps = self.aur_client.get_all_dependencies(name) if mirror == 'aur' else pacman.read_dependencies(name)
 
             if subdeps:
-                missing_subdeps = self.get_missing_packages(subdeps)
+                missing_subdeps = self.get_missing_packages(subdeps, in_analysis={*names})
 
                 if missing_subdeps:
                     missing.extend(missing_subdeps)
