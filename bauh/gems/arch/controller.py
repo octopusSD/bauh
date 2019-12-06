@@ -594,7 +594,9 @@ class ArchManager(SoftwareManager):
                         return True  # because the main package installation was successful
 
                     if missing_deps:
-                        if not confirmation.request_install_missing_deps(None, missing_deps, handler.watcher, self.i18n):
+                        same_as_selected = len(deps_to_install) == len(missing_deps) and deps_to_install == {d[0] for d in missing_deps}
+
+                        if not same_as_selected and not confirmation.request_install_missing_deps(None, missing_deps, handler.watcher, self.i18n):
                             handler.watcher.print(self.i18n['action.cancelled'])
                             return True  # because the main package installation was successful
 
