@@ -484,7 +484,7 @@ class ArchManager(SoftwareManager):
         if check_subdeps:
             for deps in ((repo_deps, 'repo'), (aur_deps, 'aur')):
                 if deps[0]:
-                    missing_subdeps = self.deps_analyser.get_missing_dependencies_from(deps[0], deps[1])
+                    missing_subdeps = self.deps_analyser.get_missing_subdeps_of(deps[0], deps[1])
 
                     if missing_subdeps:
                         for dep in missing_subdeps:

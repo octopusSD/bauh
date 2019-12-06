@@ -32,7 +32,7 @@ class DependenciesAnalyser:
 
         output.append((name, ''))
 
-    def get_missing_dependencies(self, names: Set[str], mirror: str = None) -> List[Tuple[str, str]]:
+    def get_missing_packages(self, names: Set[str], mirror: str = None) -> List[Tuple[str, str]]:
 
         missing_names = pacman.check_missing(names)
 
@@ -64,7 +64,7 @@ class DependenciesAnalyser:
                 subdeps = self.aur_client.get_all_dependencies(dep[0]) if dep[1] == 'aur' else pacman.read_dependencies(dep[0])
 
                 if subdeps:
-                    missing_subdeps = self.get_missing_dependencies(subdeps)
+                    missing_subdeps = self.get_missing_packages(subdeps)
 
                     # checking if there is any unknown:
                     if missing_subdeps:
@@ -77,13 +77,13 @@ class DependenciesAnalyser:
 
             return [*missing_sub, *missing_root]
 
-    def get_missing_dependencies_from(self, names: Set[str], mirror: str) -> List[Tuple[str, str]]:
+    def get_missing_subdeps_of(self, names: Set[str], mirror: str) -> List[Tuple[str, str]]:
         missing = []
-        for dep in names:
-            subdeps = self.aur_client.get_all_dependencies(dep) if mirror == 'aur' else pacman.read_dependencies(dep)
+        for name in names:
+            subdeps = self.aur_client.get_all_dependencies(name) if mirror == 'aur' else pacman.read_dependencies(name)
 
             if subdeps:
-                missing_subdeps = self.get_missing_dependencies(subdeps)
+                missing_subdeps = self.get_missing_packages(subdeps)
 
                 if missing_subdeps:
                     missing.extend(missing_subdeps)
