@@ -29,7 +29,7 @@ def get_repositories(pkgs: Set[str]) -> dict:
                 if p in match:
                     mirrors[p] = match.split('/')[0]
 
-    not_found = {pkg for pkg in pkgs if pkg not in mirrors}
+    not_found = {pkg for pkg in pkgs if pkg and pkg not in mirrors}
 
     if not_found:  # if there are some packages not found, try to find via the single method:
         for dep in not_found:
@@ -240,7 +240,7 @@ def check_missing(names: Set[str]) -> Set[str]:
             err_line = o.decode()
 
             if err_line:
-                not_found = RE_DEP_NOTFOUND.findall(err_line)
+                not_found = [n for n in RE_DEP_NOTFOUND.findall(err_line) if n]
 
                 if not_found:
                     not_installed.update(not_found)
@@ -274,6 +274,10 @@ def read_repository_from_info(name: str) -> str:
 
 
 def guess_repository(name: str) -> Tuple[str, str]:
+
+    if not name:
+        raise Exception("'name' cannot be None or blank")
+
     only_name = RE_DEP_OPERATORS.split(name)[0]
     res = run_cmd('pacman -Ss {}'.format(only_name))
 
