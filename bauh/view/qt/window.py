@@ -142,11 +142,16 @@ class ManageWindow(QWidget):
         self.checkbox_updates.stateChanged.connect(self._handle_updates_filter)
         self.ref_checkbox_updates = self.toolbar.addWidget(self.checkbox_updates)
 
-        self.checkbox_only_apps = QCheckBox()
-        self.checkbox_only_apps.setText(self.i18n['manage_window.checkbox.only_apps'])
-        self.checkbox_only_apps.setChecked(True)
-        self.checkbox_only_apps.stateChanged.connect(self._handle_filter_only_apps)
-        self.ref_checkbox_only_apps = self.toolbar.addWidget(self.checkbox_only_apps)
+        self.combo_apps = QComboBox()
+        self.combo_apps.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.combo_apps.setEditable(True)
+        self.combo_apps.lineEdit().setReadOnly(True)
+        self.combo_apps.lineEdit().setAlignment(Qt.AlignCenter)
+        self.combo_apps.addItem(load_icon(resource.get_path('img/logo.svg'), 14), 'Everything'.capitalize(), 0)
+        self.combo_apps.addItem(load_icon(resource.get_path('img/applications.svg'), 12), 'Applications'.capitalize(), 1)
+        self.combo_apps.setCurrentIndex(1)
+        self.combo_apps.activated.connect(self._handle_filter_apps)
+        self.ref_combo_apps = self.toolbar.addWidget(self.combo_apps)
 
         self.any_type_filter = 'any'
         self.cache_type_filter_icons = {}
@@ -327,7 +332,7 @@ class ManageWindow(QWidget):
 
         qt_utils.centralize(self)
 
-        self.filter_only_apps = True
+        self.filter_only_apps = 1
         self.type_filter = self.any_type_filter
         self.category_filter = self.any_category_filter
         self.filter_updates = False
@@ -431,7 +436,7 @@ class ManageWindow(QWidget):
         if self.pkgs_installed:
             self.finish_action()
             self.ref_bt_upgrade.setVisible(True)
-            self.ref_checkbox_only_apps.setVisible(True)
+            self.ref_combo_apps.setVisible(True)
             self.input_search.setText('')
             self.input_name_filter.setText('')
             self.update_pkgs(new_pkgs=None, as_installed=True)
@@ -446,8 +451,9 @@ class ManageWindow(QWidget):
         self.filter_updates = status == 2
         self.apply_filters_async()
 
-    def _handle_filter_only_apps(self, status: int):
-        self.filter_only_apps = status == 2
+    def _handle_filter_apps(self, index: int):
+        self.filter_only_apps = index
+        self.combo_apps.adjustSize()
         self.apply_filters_async()
 
     def _handle_type_filter(self, idx: int):
@@ -514,7 +520,7 @@ class ManageWindow(QWidget):
             self._handle_console_option(False)
 
         self.ref_checkbox_updates.setVisible(False)
-        self.ref_checkbox_only_apps.setVisible(False)
+        self.ref_combo_apps.setVisible(False)
         self._begin_action(self.i18n['manage_window.status.refreshing'], keep_bt_installed=False, clear_filters=not self.recent_uninstall)
 
         self.thread_refresh.app = top_app  # the app will be on top when refresh happens
@@ -525,14 +531,14 @@ class ManageWindow(QWidget):
         self.input_search.clear()
         self._handle_console_option(False)
         self.ref_checkbox_updates.setVisible(False)
-        self.ref_checkbox_only_apps.setVisible(False)
+        self.ref_combo_apps.setVisible(False)
         self._begin_action('Retrieving suggestions', keep_bt_installed=False, clear_filters=not self.recent_uninstall)
         self.thread_suggestions.filter_installed = True
         self.thread_suggestions.start()
 
     def _finish_refresh_apps(self, res: dict, as_installed: bool = True):
         self.finish_action()
-        self.ref_checkbox_only_apps.setVisible(bool(res['installed']))
+        self.ref_combo_apps.setVisible(bool(res['installed']))
         self.ref_bt_upgrade.setVisible(True)
         self.update_pkgs(res['installed'], as_installed=as_installed, types=res['types'], keep_filters=self.recent_uninstall and res['types'])
         self.first_refresh = False
@@ -651,7 +657,7 @@ class ManageWindow(QWidget):
                     self._change_checkbox(self.checkbox_updates, True, 'filter_updates', trigger_filters)
 
             if pkgs_info['napp_updates'] > 0 and self.filter_only_apps and not keep_selected:
-                self._change_checkbox(self.checkbox_only_apps, False, 'filter_only_apps', trigger_filters)
+                self._change_combo(self.combo_apps, 0, 'filter_only_apps', trigger_filters)
         else:
             if not keep_selected:
                 self._change_checkbox(self.checkbox_updates, False, 'filter_updates', trigger_filters)
@@ -668,9 +674,19 @@ class ManageWindow(QWidget):
             setattr(self, attr, checked)
             checkbox.blockSignals(False)
 
+    def _change_combo(self, combo: QComboBox, selected: int, attr: str = None, trigger: bool = True):
+        if not trigger:
+            combo.blockSignals(True)
+
+        combo.setCurrentIndex(selected)
+
+        if not trigger:
+            setattr(self, attr, selected)
+            combo.blockSignals(False)
+
     def _gen_filters(self, updates: int = 0, ignore_updates: bool = False) -> dict:
         return {
-            'only_apps': self.filter_only_apps,
+            'only_apps': bool(self.filter_only_apps),
             'type': self.type_filter,
             'category': self.category_filter,
             'updates': False if ignore_updates else self.filter_updates,
@@ -714,12 +730,12 @@ class ManageWindow(QWidget):
                 return
             else:
                 if not keep_filters:
-                    self._change_checkbox(self.checkbox_only_apps, False, 'filter_only_apps', trigger=False)
-                    self.checkbox_only_apps.setCheckable(False)
+                    self._change_checkbox(self.combo_apps, 0, 'filter_only_apps', trigger=False)
+                    self.combo_apps.setEnabled(False)
         else:
             if not keep_filters:
-                self.checkbox_only_apps.setCheckable(True)
-                self._change_checkbox(self.checkbox_only_apps, True, 'filter_only_apps', trigger=False)
+                self.combo_apps.setEnabled(True)
+                self._change_combo(self.combo_apps, 1, 'filter_only_apps', trigger=False)
 
         self.change_update_state(pkgs_info=pkgs_info, trigger_filters=False, keep_selected=keep_filters and bool(pkgs_info['pkgs_displayed']))
         self._update_categories(pkgs_info['categories'], keep_selected=keep_filters and bool(pkgs_info['pkgs_displayed']))
@@ -913,7 +929,7 @@ class ManageWindow(QWidget):
         if self.ref_bt_suggestions:
             self.ref_bt_suggestions.setVisible(False)
 
-        self.checkbox_only_apps.setEnabled(False)
+        self.combo_apps.setEnabled(False)
         self.table_apps.setEnabled(False)
         self.checkbox_updates.setEnabled(False)
 
@@ -945,7 +961,7 @@ class ManageWindow(QWidget):
         self.ref_bt_settings.setVisible(True)
 
         self.ref_bt_refresh.setVisible(True)
-        self.checkbox_only_apps.setEnabled(True)
+        self.combo_apps.setEnabled(True)
         self.table_apps.setEnabled(True)
         self.input_search.setEnabled(True)
         self.label_status.setText('')
@@ -1048,7 +1064,7 @@ class ManageWindow(QWidget):
 
     def _begin_search(self, word):
         self._handle_console_option(False)
-        self.ref_checkbox_only_apps.setVisible(False)
+        self.ref_combo_apps.setVisible(False)
         self.ref_checkbox_updates.setVisible(False)
         self.filter_updates = False
         self._begin_action('{} {}'.format(self.i18n['manage_window.status.searching'], word if word else ''), clear_filters=True)
@@ -1112,7 +1128,7 @@ class ManageWindow(QWidget):
 
             self._finish_refresh_apps({'installed': [res['pkg'].model], 'total': 1, 'types': None})
             self.ref_bt_installed.setVisible(False)
-            self.ref_checkbox_only_apps.setVisible(False)
+            self.ref_combo_apps.setVisible(False)
         else:
             if self._can_notify_user():
                 util.notify_user('{}: {}'.format(res['pkg'].model.name, self.i18n['notification.install.failed']))
